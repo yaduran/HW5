@@ -195,6 +195,6 @@ void            virtio_disk_intr(void);
 void            seminit(void);
 int             semalloc(int initval);
 void            semdealloc(int id);
-
+extern struct semtab semtable;
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
