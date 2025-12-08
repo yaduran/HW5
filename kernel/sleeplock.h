@@ -19,4 +19,4 @@ struct semtab {
   struct semaphore sem[NSEM];
 };
 
-extern struct semtab semtable
+extern struct semtab semtable;
