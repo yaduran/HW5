@@ -18,13 +18,51 @@ rw_t *rw;
 void
 reader(void)
 {
-  /* implement your semaphore logic for reader */
+  int i;
+
+  for (i = 0; i < READER_ITERS; i++) {
+    // entry section for reader
+    sem_wait(&rw->mutex);
+    rw->readercount++;
+    if (rw->readercount == 1) {
+      // first reader locks out writers
+      sem_wait(&rw->wrt);
+    }
+    sem_post(&rw->mutex);
+
+    // critical section: read the shared value
+    int v = rw->value;
+    // optional debugging:
+    // printf("reader %d saw value %d\n", getpid(), v);
+
+    // exit section for reader
+    sem_wait(&rw->mutex);
+    rw->readercount--;
+    if (rw->readercount == 0) {
+      // last reader allows writers again
+      sem_post(&rw->wrt);
+    }
+    sem_post(&rw->mutex);
+  }
+
+  exit(0);
 }
 
 void
 writer(void)
 {
-  /* implement your semaphore logic for writer */
+  int i;
+
+  for (i = 0; i < WRITER_ITERS; i++) {
+    // writers need exclusive access to the shared value
+    sem_wait(&rw->wrt);
+    rw->value++;
+    // optional debugging:
+    // printf("writer %d incremented value to %d\n", getpid(), rw->value);
+    sem_post(&rw->wrt);
+  }
+
+  exit(0);
 }
 
 int
