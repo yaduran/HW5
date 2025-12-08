@@ -7,8 +7,6 @@
 #include "spinlock.h"
 #include "proc.h"
 
-extern struct semtab semtable;
-
 uint64
 sys_exit(void)
 {
@@ -116,23 +114,29 @@ sys_freepmem(void)
   return pages * PGSIZE;
 }
 
-uint64
-sys_sem_init(void) {
+extern struct semtab semtable;
 
-  uint64 addr;
+// int sem_init(sem_t *sem, int pshared, unsigned int value);
+uint64
+sys_sem_init(void)
+{
+  uint64 uaddr;
   int pshared;
   int val;
 
-  if(argaddr(0, &addr) < 0 || argaddr(1, &pshared) < 0 || argaddr(2, &val) < 0)
+  if (argaddr(0, &uaddr) < 0 ||
+      argint(1, &pshared) < 0 ||
+      argint(2, &val) < 0)
     return -1;
 
+  // we ignore pshared (only process-shared semaphores make sense here)
   int id = semalloc(val);
-  if(id < 0)
+  if (id < 0)
     return -1;
 
-  sem_t tempid = id;
+  sem_t kid = id;
   struct proc *p = myproc();
-  if(copyout(p->pagetable, addr, (char *)&tempid, sizeof(tempid)) < 0) {
+  if (copyout(p->pagetable, uaddr, (char *)&kid, sizeof(kid)) < 0) {
     semdealloc(id);
     return -1;
   }
@@ -140,67 +144,83 @@ sys_sem_init(void) {
   return 0;
 }
 
+// int sem_wait(sem_t *sem);
 uint64
-sys_sem_destroy(void) {
-  sem_t id;
-  uint64 addr;
-
-  if(argaddr(0, &addr) < 0)
-    return -1
-  struct proc *p = myproc()
-
-  if(copyin(p-pagetable, (char *)&id, addr, sizeof(id)) < 0)
-    return -1;
-
-  if(id < 0 || id >= NSEM || !semtable.sem[id].valid)
-    return -1
-  semdealloc(id);
-  return 0;
-}
-
-uint64
-sys_sem_wait(void) {
-  uint64 addr;
+sys_sem_wait(void)
+{
+  uint64 uaddr;
   sem_t id;
 
-  if(argaddr(0, &addr) < 0)
+  if (argaddr(0, &uaddr) < 0)
     return -1;
 
   struct proc *p = myproc();
-  if(copyin(p->pagetable, (char *)&id, addr, sizeof(id)) < 0)
-      return -1;
+  if (copyin(p->pagetable, (char *)&id, uaddr, sizeof(id)) < 0)
+    return -1;
 
-  if(id < 0 || id >= NSEM || !semtable.sem[id].valid)
-    return -1
+  if (id < 0 || id >= NSEM || !semtable.sem[id].valid)
+    return -1;
+
   struct semaphore *s = &semtable.sem[id];
 
   acquire(&s->lock);
-  while(s->count == 0) {
+  while (s->count == 0) {
+    // sleep releases s->lock while sleeping and reacquires on wakeup
     sleep(s, &s->lock);
   }
   s->count--;
   release(&s->lock);
+
   return 0;
 }
 
+// int sem_post(sem_t *sem);
 uint64
-sys_sem_post(void) {
+sys_sem_post(void)
+{
+  uint64 uaddr;
   sem_t id;
-  uint64 addr;
 
-  if(argaddr(0, &addr) < 0)
+  if (argaddr(0, &uaddr) < 0)
     return -1;
+
   struct proc *p = myproc();
-
-  if(copyin(p->pagetable, (char *)&id, addr, sizeof(id)) < 0)
+  if (copyin(p->pagetable, (char *)&id, uaddr, sizeof(id)) < 0)
     return -1;
 
-  if(id < 0 || id >= NSEM || !semtable.sem[id].valid)
+  if (id < 0 || id >= NSEM || !semtable.sem[id].valid)
     return -1;
+
   struct semaphore *s = &semtable.sem[id];
+
   acquire(&s->lock);
   s->count++;
-  wakeup(s);
+  wakeup(s);   // wake up any sleepers in sys_sem_wait()
   release(&s->lock);
+
+  return 0;
+}
+
+// int sem_destroy(sem_t *sem);
+uint64
+sys_sem_destroy(void)
+{
+  uint64 uaddr;
+  sem_t id;
+
+  if (argaddr(0, &uaddr) < 0)
+    return -1;
+
+  struct proc *p = myproc();
+  if (copyin(p->pagetable, (char *)&id, uaddr, sizeof(id)) < 0)
+    return -1;
+
+  if (id < 0 || id >= NSEM || !semtable.sem[id].valid)
+    return -1;
+
+  // No processes should still be legitimately using this semaphore;
+  // we simply mark the slot free again.
+  semdealloc(id);
+
   return 0;
 }
