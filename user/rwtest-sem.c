@@ -18,43 +18,49 @@ rw_t *rw;
 void
 reader(void)
 {
-  for (int i = 0; i < READER_ITERS; i++) {
+  // simple debug so you *know* a reader started
+  // (you can delete this later)
+  // printf("reader: pid %d starting\n", getpid());
 
-    // ENTRY SECTION for readers
-    sem_wait(&rw->mutex);          // lock readercount
-    rw->readercount++;             // this reader is entering
-    if (rw->readercount == 1) {    // first reader locks out writers
+  for (int i = 0; i < READER_ITERS; i++) {
+    // ENTRY SECTION
+    sem_wait(&rw->mutex);
+    rw->readercount++;
+    if (rw->readercount == 1) {
+      // first reader blocks writers
       sem_wait(&rw->wrt);
     }
-    sem_post(&rw->mutex);          // unlock readercount
+    sem_post(&rw->mutex);
 
-    // CRITICAL SECTION: logically "read" the shared value.
-    // We don't need to store it anywhere; the point is the synchronization.
-    // (No local variable here so we don't trigger unused-variable warnings.)
+    // CRITICAL SECTION: logically read rw->value
+    // (we don't store it anywhere; only synchronization matters)
+    // int v = rw->value;
 
-    // EXIT SECTION for readers
-    sem_wait(&rw->mutex);          // lock readercount
-    rw->readercount--;             // this reader is leaving
-    if (rw->readercount == 0) {    // last reader lets writers proceed
+    // EXIT SECTION
+    sem_wait(&rw->mutex);
+    rw->readercount--;
+    if (rw->readercount == 0) {
+      // last reader lets writers proceed
       sem_post(&rw->wrt);
     }
-    sem_post(&rw->mutex);          // unlock readercount
+    sem_post(&rw->mutex);
   }
 
-  // Child must not fall back into main(): terminate this process.
   exit(0);
 }
 
 void
 writer(void)
 {
+  // debug start
+  // printf("writer: pid %d starting\n", getpid());
+
   for (int i = 0; i < WRITER_ITERS; i++) {
-    sem_wait(&rw->wrt);    // exclusive access: blocks readers & other writers
-    rw->value++;           // write/update the shared value
-    sem_post(&rw->wrt);    // release exclusive access
+    sem_wait(&rw->wrt);   // exclusive access
+    rw->value++;          // update shared value
+    sem_post(&rw->wrt);   // release
   }
 
-  // Terminate writer child when done.
   exit(0);
 }
 
@@ -68,7 +74,11 @@ main(int argc, char *argv[])
 
   int nreaders = atoi(argv[1]);
   int nwriters = atoi(argv[2]);
-  int i;
+
+  // quick debug so you know main actually runs
+  // (if you never see this line, program never starts / crashes early)
+  printf("rw-sem: starting with %d readers, %d writers\n",
+         nreaders, nwriters);
 
   rw = (rw_t *) mmap(NULL, sizeof(rw_t),
                      PROT_READ | PROT_WRITE,
@@ -85,27 +95,36 @@ main(int argc, char *argv[])
   sem_init(&rw->wrt,   1, 1);
 
   // fork readers
-  for (i = 0; i < nreaders; i++) {
-    if (!fork()) {
+  for (int i = 0; i < nreaders; i++) {
+    int pid = fork();
+    if (pid == 0) {
       reader();
+    } else if (pid < 0) {
+      printf("rw-sem: fork reader failed\n");
+      exit(1);
     }
   }
 
   // fork writers
-  for (i = 0; i < nwriters; i++) {
-    if (!fork()) {
+  for (int i = 0; i < nwriters; i++) {
+    int pid = fork();
+    if (pid == 0) {
       writer();
+    } else if (pid < 0) {
+      printf("rw-sem: fork writer failed\n");
+      exit(1);
     }
   }
 
   // wait for all children
-  for (i = 0; i < nreaders + nwriters; i++)
+  for (int i = 0; i < nreaders + nwriters; i++)
     wait(0);
 
   // check final value
   int final = rw->value;
   int expected = nwriters * WRITER_ITERS;
   printf("rw-sem: final value = %d, expected = %d\n", final, expected);
+
   // cleanup
   sem_destroy(&rw->mutex);
   sem_destroy(&rw->wrt);
