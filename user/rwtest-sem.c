@@ -18,48 +18,43 @@ rw_t *rw;
 void
 reader(void)
 {
-  int i;
+  for (int i = 0; i < READER_ITERS; i++) {
 
-  for (i = 0; i < READER_ITERS; i++) {
-    // entry section for reader
-    sem_wait(&rw->mutex);
-    rw->readercount++;
-    if (rw->readercount == 1) {
-      // first reader locks out writers
+    // ENTRY SECTION for readers
+    sem_wait(&rw->mutex);          // lock readercount
+    rw->readercount++;             // this reader is entering
+    if (rw->readercount == 1) {    // first reader locks out writers
       sem_wait(&rw->wrt);
     }
-    sem_post(&rw->mutex);
+    sem_post(&rw->mutex);          // unlock readercount
 
-    // optional debugging:
-    // printf("reader %d saw value %d\n", getpid(), v);
+    // CRITICAL SECTION: logically "read" the shared value.
+    // We don't need to store it anywhere; the point is the synchronization.
+    // (No local variable here so we don't trigger unused-variable warnings.)
 
-    // exit section for reader
-    sem_wait(&rw->mutex);
-    rw->readercount--;
-    if (rw->readercount == 0) {
-      // last reader allows writers again
+    // EXIT SECTION for readers
+    sem_wait(&rw->mutex);          // lock readercount
+    rw->readercount--;             // this reader is leaving
+    if (rw->readercount == 0) {    // last reader lets writers proceed
       sem_post(&rw->wrt);
     }
-    sem_post(&rw->mutex);
+    sem_post(&rw->mutex);          // unlock readercount
   }
 
+  // Child must not fall back into main(): terminate this process.
   exit(0);
 }
 
 void
 writer(void)
 {
-  int i;
-
-  for (i = 0; i < WRITER_ITERS; i++) {
-    // writers need exclusive access to the shared value
-    sem_wait(&rw->wrt);
-    rw->value++;
-    // optional debugging:
-    // printf("writer %d incremented value to %d\n", getpid(), rw->value);
-    sem_post(&rw->wrt);
+  for (int i = 0; i < WRITER_ITERS; i++) {
+    sem_wait(&rw->wrt);    // exclusive access: blocks readers & other writers
+    rw->value++;           // write/update the shared value
+    sem_post(&rw->wrt);    // release exclusive access
   }
 
+  // Terminate writer child when done.
   exit(0);
 }
 
