@@ -66,6 +66,9 @@ writer(void)
 int
 main(int argc, char *argv[])
 {
+  int final = rw->value;
+  int expected = nwriters * WRITER_ITERS;
+  printf("rw-sem: final value = %d, expected = %d\n", final, expected);
   if (argc != 3) {
     printf("usage: %s <nreaders> <nwriters>\n", argv[0]);
     exit(0);
@@ -108,9 +111,6 @@ main(int argc, char *argv[])
     wait(0);
 
   // check final value
-  int final = rw->value;
-  int expected = nwriters * WRITER_ITERS;
-  printf("rw-sem: final value = %d, expected = %d\n", final, expected);
 
   // cleanup
   sem_destroy(&rw->mutex);
