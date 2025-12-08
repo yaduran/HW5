@@ -19,5 +19,3 @@ struct semtab {
   struct spinlock lock;        // lock protecting the table
   struct semaphore sem[NSEM];  // fixed-size array of semaphores
 };
-
-extern struct semtab semtable;
