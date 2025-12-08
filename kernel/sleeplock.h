@@ -7,16 +7,3 @@ struct sleeplock {
   char *name;        // Name of lock.
   int pid;           // Process holding lock
 };
-
-struct semaphore {
-  struct spinlock lock;
-  int count;
-  int valid;
-};
-
-struct semtab {
-  struct spinlock lock;
-  struct semaphore sem[NSEM];
-};
-
-extern struct semtab semtable;
