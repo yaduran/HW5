@@ -30,8 +30,6 @@ reader(void)
     }
     sem_post(&rw->mutex);
 
-    // critical section: read the shared value
-    int v = rw->value;
     // optional debugging:
     // printf("reader %d saw value %d\n", getpid(), v);
 
